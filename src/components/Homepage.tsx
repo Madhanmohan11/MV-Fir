@@ -66,7 +66,7 @@ const Homepage = () => {
               Explore Gallery
             </button>
              <a
-              href="/booking"
+              href="#booking"
               className="inline-block bg-gradient-to-r from-orange-500 to-pink-500 text-white px-8 py-3 rounded-full hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
             >
               Book Your Stay
