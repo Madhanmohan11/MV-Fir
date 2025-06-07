@@ -1,13 +1,18 @@
 import React, { useState } from "react";
-import { useBooking } from "../context/BookingContext";
+import { useBooking } from "../context/BookingContext"; // Still needed for other resortDetails
 import { Star, MapPin, Phone } from "lucide-react";
 import About from "./About";
 import Gallery from "./Gallery";
 import Bookinsec from "./Bookinginfo";
 import CustomerReviews from "./CustomerReviews";
 
+// Import your local video file directly
+// Assuming your video is in 'public/videos/resort_hero_video.mp4'
+// In Vite/React, public assets are served from the root, so you can reference it directly
+const LOCAL_VIDEO_PATH = "/logo-file/image/resort.mp4";
+
 const Homepage = () => {
-  const { resortDetails } = useBooking();
+  const { resortDetails } = useBooking(); // Still using this for name, description etc.
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   // Scroll to the gallery section smoothly
@@ -17,7 +22,6 @@ const Homepage = () => {
       gallerySection.scrollIntoView({ behavior: "smooth" });
     }
   };
-
 
   return (
     <div className="min-h-screen">
@@ -33,9 +37,9 @@ const Homepage = () => {
           loop
           playsInline
           className="absolute inset-0 w-full h-full object-cover z-0"
-          poster={resortDetails.videoPoster || ""}
         >
-          <source src={resortDetails.videoUrl} type="video/mp4" />
+          {/* Use the local video path directly */}
+          <source src={LOCAL_VIDEO_PATH} type="video/mp4" />
           Your browser does not support the video tag.
         </video>
 
@@ -49,13 +53,11 @@ const Homepage = () => {
           </div>
 
           <h1 className="text-5xl md:text-7xl font-bold mb-5 animate-fade-in bg-gradient-to-r from-white via-orange-100 to-teal-100 bg-clip-text text-transparent">
-            MADRAS VILLA
+            {resortDetails.name || "MADRAS VILLA"}
           </h1>
 
           <p className="text-xl md:text-2xl mb-8 opacity-90 animate-fade-in">
-            Escape to paradise where luxury meets tranquility. Experience world-class
-            amenities, breathtaking views, and unforgettable moments at our exclusive
-            resort.
+            {resortDetails.description || "Escape to paradise where luxury meets tranquility. Experience world-class amenities, breathtaking views, and unforgettable moments at our exclusive resort."}
           </p>
 
           <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
@@ -65,7 +67,7 @@ const Homepage = () => {
             >
               Explore Gallery
             </button>
-             <a
+            <a
               href="#booking"
               className="inline-block bg-gradient-to-r from-orange-500 to-pink-500 text-white px-8 py-3 rounded-full hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
             >
@@ -97,14 +99,11 @@ const Homepage = () => {
 
       {/* Other Sections */}
       <About />
-      
 
       <section id="gallery-section">
-      {/* Add the id here to scroll to */}
-        <Gallery />
+        <Gallery setSelectedImage={setSelectedImage} />
       </section>
-      
-    
+
       <Bookinsec />
 
       {/* Customer Reviews Section */}

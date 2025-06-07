@@ -1,67 +1,71 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '../context/AuthContext'; // ADDED: Import useAuth to get currentUser
+import { updatePassword } from 'firebase/auth'; // ADDED: Import updatePassword function from Firebase Auth
 
 const AdminPasswordReset = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { toast } = useToast();
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const { currentUser } = useAuth(); // ADDED: Get currentUser from AuthContext
+
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    // Handle the auth callback
-    const handleAuthCallback = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setError('Invalid or expired reset link');
-        setTimeout(() => navigate('/admin'), 3000);
-      }
-    };
-
-    handleAuthCallback();
-  }, [navigate]);
+  const [error, setError] = useState("");
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
+
+    // ADDED: Check if a user is currently logged in
+    if (!currentUser) {
+      setError("You must be logged in to reset your password. Please log in first.");
+      setIsLoading(false);
+      // Optional: Redirect to login page if no current user
+      // navigate('/admin');
+      return;
+    }
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError("Passwords do not match");
       setIsLoading(false);
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      setError("Password must be at least 6 characters long");
       setIsLoading(false);
       return;
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      // CHANGED: Replaced simulation with actual Firebase updatePassword call
+      await updatePassword(currentUser, password);
+
+      toast({
+        title: "Password Updated",
+        description: "Your password has been successfully updated.",
       });
+      navigate("/admin/dashboard"); // Changed navigation to dashboard for consistency
+    } catch (err: any) { // Catch specific Firebase errors for better user feedback
+      console.error("Firebase Password Update Error:", err);
+      let errorMessage = "Failed to update password. Please try again.";
 
-      if (error) {
-        setError(error.message);
-      } else {
-        toast({
-          title: "Password Updated",
-          description: "Your password has been successfully updated.",
-        });
-        navigate('/admin');
+      if (err.code === 'auth/requires-recent-login') {
+        errorMessage = "For security, please re-authenticate to change your password. Log out and log in again, then try changing your password.";
+      } else if (err.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak. Please choose a stronger password.";
+      } else if (err.code === 'auth/invalid-credential') {
+        errorMessage = "Invalid credentials. Please log in again.";
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Please check your internet connection.";
       }
-    } catch (err) {
-      setError('Failed to update password. Please try again.');
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
   };
 
   return (
@@ -122,13 +126,13 @@ const AdminPasswordReset = () => {
               disabled={isLoading}
               className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isLoading ? 'Updating...' : 'Update Password'}
+              {isLoading ? "Updating..." : "Update Password"}
             </button>
           </form>
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => navigate('/admin')}
+              onClick={() => navigate("/admin")}
               className="text-gray-600 hover:text-gray-700 text-sm transition-colors"
             >
               Back to Login

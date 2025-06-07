@@ -1,64 +1,95 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useBooking } from '../context/BookingContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext"; // Import your AuthContext hook
+import { useToast } from "@/hooks/use-toast"; // Your toast hook
+import { FirebaseError } from "firebase/app"; // Import FirebaseError type if you have it installed for better type checking
+import { getAuth, sendPasswordResetEmail } from "firebase/auth"; // <-- ADD THIS IMPORT
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { setIsAdmin } = useBooking();
   const { toast } = useToast();
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
+  // Changed this line: Only destructure 'login' from useAuth as sendPasswordResetEmail
+  // will be used directly from Firebase SDK.
+  const { login } = useAuth();
+
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
+  const [resetEmail, setResetEmail] = useState("");
   const [isResetting, setIsResetting] = useState(false);
 
+  // --- Firebase Login Handler ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
-    
-    // Simulate loading time for better UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Simple authentication (In production, use proper authentication)
-    if (credentials.username === 'mvpriya' && credentials.password === 'Madrasvilla@2025') {
-      setIsAdmin(true);
-      navigate('/admin/dashboard');
-    } else {
-      setError('Invalid credentials. Try username: admin, password: admin123');
+    setError("");
+
+    try {
+      await login(credentials.email, credentials.password);
+      navigate("/admin/dashboard");
+    } catch (err) {
+      console.error("Firebase Login Error:", err);
+      let errorMessage = "Failed to log in. Please try again.";
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case "auth/invalid-email":
+            errorMessage = "Invalid email address.";
+            break;
+          case "auth/user-disabled":
+            errorMessage = "This user account has been disabled.";
+            break;
+          case "auth/invalid-credential":
+            errorMessage = "Invalid email or password.";
+            break;
+          case "auth/too-many-requests":
+            errorMessage =
+              "Too many failed login attempts. Please try again later.";
+            break;
+          default:
+            errorMessage = `Login error: ${err.message}`;
+        }
+      }
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
+  // --- Firebase Password Reset Handler ---
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsResetting(true);
-    setError('');
+    setError("");
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/admin/reset-password`,
+      const auth = getAuth(); // <-- GET THE AUTH INSTANCE HERE
+      await sendPasswordResetEmail(auth, resetEmail); // <-- USE THE DIRECT SDK FUNCTION HERE
+      toast({
+        title: "Password Reset Email Sent",
+        description: `If an account exists for ${resetEmail}, a password reset link has been sent.`,
       });
-
-      if (error) {
-        setError(error.message);
-      } else {
-        toast({
-          title: "Password Reset Email Sent",
-          description: "Please check your email for password reset instructions.",
-        });
-        setShowForgotPassword(false);
-        setResetEmail('');
-      }
+      setShowForgotPassword(false);
+      setResetEmail("");
     } catch (err) {
-      setError('Failed to send reset email. Please try again.');
+      console.error("Firebase Password Reset Error:", err);
+      let errorMessage = "Failed to send reset email. Please try again.";
+      if (err instanceof FirebaseError) {
+        switch (err.code) {
+          case "auth/invalid-email":
+            errorMessage = "Invalid email address.";
+            break;
+          case "auth/user-not-found":
+            errorMessage = "No user found with that email.";
+            break;
+          default:
+            errorMessage = `Reset error: ${err.message}`;
+        }
+      }
+      setError(errorMessage);
+    } finally {
+      setIsResetting(false);
     }
-
-    setIsResetting(false);
   };
 
   if (showForgotPassword) {
@@ -73,18 +104,21 @@ const AdminLogin = () => {
               <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-pink-600 bg-clip-text text-transparent">
                 Reset Password
               </h1>
-              <p className="text-gray-600 mt-2">Enter your email to reset your password</p>
-             </div>
+              <p className="text-gray-600 mt-2">
+                Enter your email to reset your password
+              </p>
+            </div>
 
             <form onSubmit={handleForgotPassword} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address
                 </label>
-               <input
-                type="email"
+                <input
+                  type="email"
+                  autoFocus
                   value={resetEmail}
-                   onChange={(e) => setResetEmail(e.target.value)}
+                  onChange={(e) => setResetEmail(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                   placeholder="Enter your email"
                   required
@@ -102,9 +136,9 @@ const AdminLogin = () => {
                 <button
                   type="submit"
                   disabled={isResetting}
-                  className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
                 >
-                  {isResetting ? 'Sending...' : 'Send Reset Email'}
+                  {isResetting ? "Sending..." : "Send Reset Link"}
                 </button>
 
                 <button
@@ -139,14 +173,17 @@ const AdminLogin = () => {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username
+                Email
               </label>
               <input
-                type="text"
-                value={credentials.username}
-                onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
+                type="email"
+                autoFocus
+                value={credentials.email}
+                onChange={(e) =>
+                  setCredentials({ ...credentials, email: e.target.value })
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                placeholder="Enter username"
+                placeholder="Enter email"
                 required
                 disabled={isLoading}
               />
@@ -159,7 +196,9 @@ const AdminLogin = () => {
               <input
                 type="password"
                 value={credentials.password}
-                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                onChange={(e) =>
+                  setCredentials({ ...credentials, password: e.target.value })
+                }
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
                 placeholder="Enter password"
                 required
@@ -176,9 +215,9 @@ const AdminLogin = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="w-full px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
             >
-              {isLoading ? 'Logging in...' : 'Login to Dashboard'}
+              {isLoading ? "Logging in..." : "Login to Dashboard"}
             </button>
 
             <div className="text-center">
@@ -191,14 +230,6 @@ const AdminLogin = () => {
               </button>
             </div>
           </form>
-
-          {/* <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-700">
-              <strong>Demo Credentials:</strong><br />
-              Username: admin<br />
-              Password: admin123
-            </p>
-          </div> */}
         </div>
       </div>
     </div>
