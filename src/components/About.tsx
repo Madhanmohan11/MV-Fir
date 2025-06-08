@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Wifi, Car, Music, Waves, TreePine, Gamepad2 } from 'lucide-react';
-import dayi from '../assets/logo-file/image/Day-ori.png'; // Adjust the path as necessary    
+import dayi from '/image/Day-ori.png'; // Adjust the path as necessary    
 
 const About = () => {
   const amenities = [
