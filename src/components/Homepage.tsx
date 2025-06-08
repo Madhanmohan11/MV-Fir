@@ -9,7 +9,7 @@ import CustomerReviews from "./CustomerReviews";
 // Import your local video file directly
 // Assuming your video is in 'public/videos/resort_hero_video.mp4'
 // In Vite/React, public assets are served from the root, so you can reference it directly
-const LOCAL_VIDEO_PATH = "/src/assets/logo-file/image/resort.mp4";
+const LOCAL_VIDEO_PATH = "../assets/logo-file/image/resort.mp4";
 
 const Homepage = () => {
   const { resortDetails } = useBooking(); // Still using this for name, description etc.

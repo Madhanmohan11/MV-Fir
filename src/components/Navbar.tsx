@@ -17,7 +17,7 @@ const Navbar = () => {
           {/* Logo + Resort Name (shown only on md+) */}
           <Link to="/" className="flex items-center space-x-3">
             <img
-              src="/src/assets/logo-file/12.png"
+              src="../assets/logo-file/12.png"
               alt="Madras Villa Logo"
               className="h-8 w-auto"
             />
