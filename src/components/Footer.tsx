@@ -16,7 +16,7 @@ const Footer = () => {
           <div className="md:col-span-2">
             <div className="flex items-center space-x-3 mb-4">
               <img 
-                src="/logo-file/12.png" // <-- remove '/public', just start from root
+                src="/src/assets/logo-file/12.png" // <-- remove '/public', just start from root
                 alt={`${resortDetails?.name || 'Resort'} Logo`} 
                 className="h-7 w-auto"
               />

@@ -1,140 +1,71 @@
-import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBooking } from '../context/BookingContext';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
-import { Users, CheckCircle2, XCircle, Info } from 'lucide-react'; // Import icons for better visual cues
+import { Users } from 'lucide-react'; // Only Users is used
 import { format, parseISO } from 'date-fns';
-import { useToast } from '@/components/ui/use-toast';
 
 const BookingPage = () => {
   const navigate = useNavigate();
-  const {
-    bookingDetails,
-    setBookingDetails,
-    resortDetails,
-    availableSlots, // availableSlots would ideally be dynamic based on date
-    addBooking,
-  } = useBooking();
-
-  const { toast } = useToast();
-
+  const { bookingDetails, setBookingDetails, resortDetails, availableSlots } = useBooking();
   const [currentStep, setCurrentStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isStepValid, setIsStepValid] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Get today's date for minimum date selection
-  const [currentDate] = useState(new Date().toISOString().split('T')[0]); // Use state for a stable 'today'
 
   const handleInputChange = (field: string, value: string | number) => {
-    setBookingDetails((prev) => {
-      const updatedDetails = {
-        ...prev,
-        [field]: value,
-        totalAmount:
-          field === 'members'
-            ? Number(value) * resortDetails.pricing
-            : prev.totalAmount,
-      };
-      return updatedDetails;
-    });
+    setBookingDetails((prevDetails) => ({
+      ...prevDetails,
+      [field]: value,
+      // Recalculate totalAmount only if 'members' field changes
+      totalAmount: field === 'members'
+        ? Number(value) * resortDetails.pricing
+        : prevDetails.totalAmount,
+    }));
 
+    // Clear error for the current field if it exists
     if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
+      setErrors({ ...errors, [field]: '' });
     }
   };
 
-  // Memoize validateStep to prevent unnecessary re-renders and issues with useEffect deps
-  const validateStep = useCallback((step: number) => {
+  const validateStep = (step: number) => {
     const newErrors: Record<string, string> = {};
 
     if (step === 1) {
       if (!bookingDetails.date) newErrors.date = 'Date is required';
-      if (!bookingDetails.timeSlot)
-        newErrors.timeSlot = 'Time slot is required';
-      if (bookingDetails.members < 1)
-        newErrors.members = 'At least 1 guest is required';
+      if (!bookingDetails.timeSlot) newErrors.timeSlot = 'Time slot is required';
+      if (bookingDetails.members < 1) newErrors.members = 'At least 1 member is required';
     }
 
     if (step === 2) {
-      if (!bookingDetails.fullName.trim())
-        newErrors.fullName = 'Full name is required';
-      if (!bookingDetails.email.trim())
+      if (!bookingDetails.fullName.trim()) newErrors.fullName = 'Full name is required';
+      if (!bookingDetails.email.trim()) {
         newErrors.email = 'Email is required';
-      else if (!/\S+@\S+\.\S+/.test(bookingDetails.email))
+      } else if (!/\S+@\S+\.\S+/.test(bookingDetails.email)) {
         newErrors.email = 'Email is invalid';
-      if (!bookingDetails.phone.trim())
+      }
+      if (!bookingDetails.phone.trim()) {
         newErrors.phone = 'Phone number is required';
-      else if (
-        !/^\d{10}$/.test(bookingDetails.phone.replace(/\D/g, ''))
-      )
+      } else if (!/^\d{10}$/.test(bookingDetails.phone.replace(/\D/g, ''))) {
         newErrors.phone = 'Phone number must be 10 digits';
+      }
     }
 
-    setErrors(newErrors); // setErrors here will trigger re-render
+    setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [bookingDetails]); // Dependencies for useCallback
+  };
 
-  useEffect(() => {
-    setIsStepValid(validateStep(currentStep));
-  }, [bookingDetails, currentStep, validateStep]); // Corrected dependencies
-
-
-  // Effect to reset timeSlot when date changes
-  useEffect(() => {
-    // Only reset if a date was previously selected and has now changed
-    // And if the new date is different from the old one
-    if (bookingDetails.timeSlot && bookingDetails.date) {
-      // If the date changes, clear the time slot to force re-selection for the new date
-      // This assumes availableSlots might change based on date
-      // If availableSlots is always static, you might not need to clear timeSlot
-      setBookingDetails(prev => ({
-        ...prev,
-        timeSlot: '', // Clear time slot if date changes
-      }));
-    }
-  }, [bookingDetails.date, setBookingDetails]); // Depend on bookingDetails.date
-
-  const handleNext = async () => {
-    if (!validateStep(currentStep)) return;
-
-    if (currentStep === 1) {
-      setCurrentStep(2);
-    } else if (currentStep === 2) {
-      setIsSubmitting(true);
-      try {
-        const result = await addBooking(bookingDetails);
-
-        if (result.status === 'created') {
-          toast({
-            title: "🎉 Booking Confirmed!",
-            description: `Great news, ${bookingDetails.fullName}! Your ${resortDetails.name} experience on ${format(parseISO(bookingDetails.date), 'PPP')} at ${bookingDetails.timeSlot} is confirmed. Proceeding to secure your spot.`,
-            action: <CheckCircle2 className="text-green-500" />, // Icon for success
-            duration: 5000, // Show for 5 seconds
-          });
-          navigate('/payment');
-        } else if (result.status === 'exists') {
-          toast({
-            title: "Heads Up! Duplicate Booking",
-            description: `It looks like you've already reserved the ${bookingDetails.timeSlot} slot on ${format(parseISO(bookingDetails.date), 'PPP')} with this email. Check your existing bookings!`,
-            action: <Info className="text-blue-500" />, // Icon for info/warning
-            duration: 6000, // Show for 6 seconds
-          });
-          // You might choose to navigate to existing bookings or keep them on the page
-          // navigate('/my-bookings');
-        }
-      } catch (error) {
-        console.error('Booking save failed:', error);
-        toast({
-          title: "Booking Failed 😔",
-          description: "Oops! We encountered an issue while processing your booking. Please review your details and try again.",
-          variant: "destructive",
-          action: <XCircle className="text-red-500" />, // Icon for error
-          duration: 7000, // Show for 7 seconds
-        });
-      } finally {
-        setIsSubmitting(false);
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      if (currentStep === 1) {
+        // Ensure totalAmount is correctly updated before moving to the next step
+        setBookingDetails((prevDetails) => ({
+          ...prevDetails,
+          totalAmount: prevDetails.members * resortDetails.pricing,
+        }));
+        setCurrentStep(2);
+      } else if (currentStep === 2) {
+        navigate('/payment');
       }
     }
   };
@@ -142,6 +73,8 @@ const BookingPage = () => {
   const handleBack = () => {
     setCurrentStep(1);
   };
+
+  const today = new Date().toISOString().split('T')[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-pink-50 py-12">
@@ -151,84 +84,60 @@ const BookingPage = () => {
             Book Your Stay
           </h1>
           <p className="text-gray-600 text-lg">
-            {resortDetails?.name ?? 'Resort'} - ₹
-            {resortDetails?.pricing?.toLocaleString() ?? '0'} per person per
-            day
+            {resortDetails.name} - ₹{resortDetails.pricing.toLocaleString()} per person per day
           </p>
         </div>
 
         {/* Progress Indicator */}
         <div className="flex items-center justify-center mb-12">
           <div className="flex items-center space-x-4">
-            {[1, 2].map((step) => (
-              <React.Fragment key={step}>
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    currentStep >= step
-                      ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  {step}
-                </div>
-                {step !== 2 && (
-                  <div
-                    className={`w-16 h-1 ${
-                      currentStep > step
-                        ? 'bg-gradient-to-r from-orange-500 to-pink-500'
-                        : 'bg-gray-200'
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            ))}
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              currentStep >= 1 ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
+            }`}>
+              1
+            </div>
+            <div className={`w-16 h-1 ${currentStep >= 2 ? 'bg-gradient-to-r from-orange-500 to-pink-500' : 'bg-gray-200'}`}></div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              currentStep >= 2 ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
+            }`}>
+              2
+            </div>
+            <div className={`w-16 h-1 ${currentStep >= 3 ? 'bg-gradient-to-r from-orange-500 to-pink-500' : 'bg-gray-200'}`}></div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+              currentStep >= 3 ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white' : 'bg-gray-200 text-gray-500'
+            }`}>
+              3
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {currentStep === 1 && (
-            <>
-              {/* Step 1 */}
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">
-                Select Date & Time
-              </h2>
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Select Date & Time</h2>
 
-              {/* Date */}
-              <div className="mb-6">
-                <label
-                  htmlFor="date"
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                >
+              <div>
+                <Label htmlFor="check-in-date">
                   Check-in Date
-                </label>
+                </Label>
                 <input
+                  id="check-in-date"
                   type="date"
-                  id="date"
-                  min={currentDate} // Use currentDate from state
+                  min={today}
                   value={bookingDetails.date}
-                  onChange={(e) =>
-                    handleInputChange('date', e.target.value)
-                  }
-                  className={`w-full px-4 py-3 border rounded-lg ${
+                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${
                     errors.date ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-orange-500`}
+                  }`}
                 />
-                {errors.date && (
-                  <p className="text-red-500 text-sm mt-1">{errors.date}</p>
-                )}
+                {errors.date && <p className="text-red-500 text-sm mt-1">{errors.date}</p>}
               </div>
 
-              {/* Time Slot */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div>
+                <Label>
                   Time Slot
-                </label>
+                </Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/*
-                    IMPORTANT: availableSlots should ideally be fetched dynamically
-                    based on the selected 'date' from your backend or a booking system.
-                    For now, it uses what's provided by useBooking context.
-                  */}
                   {availableSlots.map((slot) => (
                     <button
                       key={slot}
@@ -244,11 +153,7 @@ const BookingPage = () => {
                     </button>
                   ))}
                 </div>
-                {errors.timeSlot && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.timeSlot}
-                  </p>
-                )}
+                {errors.timeSlot && <p className="text-red-500 text-sm mt-1">{errors.timeSlot}</p>}
               </div>
 
               {/* Members */}
@@ -275,8 +180,7 @@ const BookingPage = () => {
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-gray-500 mt-1">
-                  Total: ₹
-                  {(bookingDetails.members * resortDetails.pricing).toLocaleString()}
+                  Total: ₹{(bookingDetails.members * resortDetails.pricing).toLocaleString()}
                 </p>
                 {errors.members && (
                   <p className="text-red-500 text-sm mt-1">
@@ -284,86 +188,66 @@ const BookingPage = () => {
                   </p>
                 )}
               </div>
-            </>
+            </div>
           )}
 
-          {currentStep === 2 && (
-            <>
-              {/* Step 2 */}
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">
-                Customer Details
-              </h2>
 
-              {/* Full Name */}
-              <div className="mb-4">
-                <label htmlFor="fullName" className="font-medium text-sm text-gray-700">
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Customer Details</h2>
+
+              <div>
+                <Label htmlFor="full-name">
                   Full Name
-                </label>
+                </Label>
                 <input
-                  id="fullName"
+                  id="full-name"
                   type="text"
                   value={bookingDetails.fullName}
-                  onChange={(e) =>
-                    handleInputChange('fullName', e.target.value)
-                  }
-                  className={`w-full px-4 py-3 border rounded-lg ${
+                  onChange={(e) => handleInputChange('fullName', e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${
                     errors.fullName ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-orange-500`}
+                  }`}
+                  placeholder="Enter your full name"
                 />
-                {errors.fullName && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.fullName}
-                  </p>
-                )}
+                {errors.fullName && <p className="text-red-500 text-sm mt-1">{errors.fullName}</p>}
               </div>
 
-              {/* Email */}
-              <div className="mb-4">
-                <label htmlFor="email" className="font-medium text-sm text-gray-700">
-                  Email
-                </label>
+              <div>
+                <Label htmlFor="email-address">
+                  Email Address
+                </Label>
                 <input
-                  id="email"
+                  id="email-address"
                   type="email"
                   value={bookingDetails.email}
-                  onChange={(e) =>
-                    handleInputChange('email', e.target.value)
-                  }
-                  className={`w-full px-4 py-3 border rounded-lg ${
+                  onChange={(e) => handleInputChange('email', e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${
                     errors.email ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-orange-500`}
+                  }`}
+                  placeholder="Enter your email address"
                 />
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.email}
-                  </p>
-                )}
+                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
               </div>
 
-              {/* Phone */}
-              <div className="mb-6">
-                <label htmlFor="phone" className="font-medium text-sm text-gray-700">
-                  Phone
-                </label>
+              <div>
+                <Label htmlFor="phone-number">
+                  Phone Number
+                </Label>
                 <input
-                  id="phone"
+                  id="phone-number"
                   type="tel"
                   value={bookingDetails.phone}
-                  onChange={(e) =>
-                    handleInputChange('phone', e.target.value)
-                  }
-                  className={`w-full px-4 py-3 border rounded-lg ${
+                  onChange={(e) => handleInputChange('phone', e.target.value)}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 ${
                     errors.phone ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-orange-500`}
+                  }`}
+                  placeholder="Enter your phone number"
                 />
-                {errors.phone && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.phone}
-                  </p>
-                )}
+                {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
               </div>
 
-              {/* Summary */}
+              {/* Booking Summary */}
               <div className="bg-orange-50 p-4 rounded-lg shadow-sm space-y-2">
                 <p>Date: {bookingDetails.date && format(parseISO(bookingDetails.date), 'PPP')}</p>
                 <p>Time: {bookingDetails.timeSlot}</p>
@@ -372,31 +256,26 @@ const BookingPage = () => {
                   Total: ₹{(bookingDetails.members * resortDetails.pricing).toLocaleString()}
                 </p>
               </div>
-            </>
+            </div>
           )}
-
           {/* Navigation Buttons */}
           <div className="flex justify-between mt-8">
             {currentStep > 1 ? (
               <button
                 onClick={handleBack}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-300"
               >
                 Back
               </button>
             ) : (
-              <div />
+              <div></div>
             )}
+
             <button
               onClick={handleNext}
-              disabled={!isStepValid || isSubmitting}
-              className={`px-8 py-3 rounded-lg font-semibold shadow-lg transform transition ${
-                isStepValid && !isSubmitting
-                  ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white hover:scale-105'
-                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'
-              }`}
+              className="px-8 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg hover:from-orange-600 hover:to-pink-600 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:scale-105"
             >
-              {isSubmitting ? 'Processing...' : (currentStep === 2 ? 'Proceed to Payment' : 'Next')}
+              {currentStep === 2 ? 'Proceed to Payment' : 'Next'}
             </button>
           </div>
         </div>
